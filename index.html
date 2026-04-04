@@ -2,368 +2,89 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PAVÃO INVEST | Private</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
-        .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.5); }
-        .gradient-bg { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
-        .hidden-view { display: none !important; }
-        
-        .suggestions-box { 
-            position: absolute; width: 100%; max-height: 320px; overflow-y: auto; 
-            background: white; border: 2px solid #3b82f6; border-radius: 1.5rem; 
-            z-index: 200; margin-top: 8px; display: none; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
-        }
-        .suggestion-item { padding: 14px 20px; cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: all 0.2s; }
-        .suggestion-item:hover { background: #f8faff; }
-
-        .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        table { min-width: 800px; border-collapse: collapse; }
-        th, td { border: 1px solid #e2e8f0; }
-        [contenteditable="true"]:focus { outline: none; background: #eff6ff; border-radius: 4px; }
-        
-        .slot-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out; }
-        .slot-open { max-height: 2000px; }
-        .chevron { transition: transform 0.3s ease; }
-        .chevron-rotate { transform: rotate(180deg); }
-        
-        #sync-indicator { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; background-color: #10b981; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
-<body class="text-slate-900 min-h-screen pb-10">
+<body class="bg-slate-50 text-slate-900 min-h-screen">
 
     <nav class="gradient-bg p-5 text-white shadow-2xl sticky top-0 z-40">
         <div class="container mx-auto flex justify-between items-center">
-            <div class="flex items-center gap-2">
-                <div id="sync-indicator"></div>
-                <h1 class="text-xl md:text-2xl font-black italic uppercase tracking-tighter">PAVÃO INVEST | PRIVATE</h1>
-            </div>
-            <div class="flex gap-2">
-                <button onclick="window.toggleModal('modalCategorias')" class="bg-slate-700 px-4 py-3 rounded-xl font-bold text-xs uppercase">Categorias</button>
-                <button onclick="window.toggleModal('modalAtivo')" class="bg-blue-600 px-4 py-3 rounded-xl font-bold text-xs uppercase">+ Novo Ativo</button>
-            </div>
+            <h1 class="text-xl font-black italic uppercase tracking-tighter">PAVÃO INVEST | PRIVATE</h1>
+            <button onclick="toggleModal('modalAtivo')" class="bg-blue-600 px-4 py-2 rounded-xl font-bold text-xs uppercase hover:bg-blue-700">+ Novo Ativo</button>
         </div>
     </nav>
 
     <main class="container mx-auto mt-8 p-4">
-        <div class="max-w-md mx-auto mb-8 text-center">
-            <div class="glass p-8 rounded-[2.5rem] shadow-xl border-b-4 border-blue-600">
-                <p class="text-slate-400 text-[10px] font-black uppercase mb-1 tracking-widest">Patrimônio Consolidado</p>
-                <h2 id="patrimonio-exibido" class="text-4xl font-black text-slate-800 tracking-tighter italic">R$ 0,00</h2>
-            </div>
+        <div class="glass p-6 rounded-[2rem] shadow-xl mb-8 inline-block">
+            <p class="text-slate-400 text-[10px] font-black uppercase mb-1">Patrimônio Consolidado</p>
+            <h2 id="patrimonio-exibido" class="text-3xl font-black italic italic tracking-tighter">R$ 0,00</h2>
         </div>
 
-        <div id="visao-estrategica" class="space-y-4">
-            <div id="aviso-meta-geral"></div>
-            <div class="glass rounded-[2.5rem] shadow-2xl overflow-hidden">
-                <div class="table-container">
-                    <table class="w-full text-left text-base uppercase font-bold">
-                        <thead class="bg-slate-50 text-slate-400 border-b">
-                            <tr>
-                                <th class="p-5 w-16 text-center">Ver</th>
-                                <th class="p-5">Categoria</th>
-                                <th class="p-5 text-center">Meta %</th>
-                                <th class="p-5 text-center">Atual %</th>
-                                <th class="p-5 text-right">Valor</th>
-                                <th class="p-5 text-right">Sugestão</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabelaCorpo" class="divide-y divide-slate-100 bg-white"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div id="visao-detalhada" class="hidden-view space-y-6">
-            <div class="flex items-center gap-3">
-                <button onclick="window.voltarParaCategorias()" class="bg-white px-6 py-3 rounded-2xl font-black shadow-sm border border-slate-200">← VOLTAR</button>
-                <h3 id="titulo-categoria-detalhe" class="font-black uppercase text-2xl text-blue-600 italic"></h3>
-            </div>
-            <div class="glass rounded-[2.5rem] shadow-xl overflow-hidden border-2 border-blue-100">
-                <div onclick="window.toggleSlot()" class="bg-blue-600 p-5 text-white font-black uppercase text-sm flex justify-between items-center cursor-pointer">
-                    <div class="flex items-center gap-3">
-                        <span id="chevron-icon" class="chevron">▼</span>
-                        <span>PLANEJAMENTO DE <span id="span-cat-name"></span></span>
-                    </div>
-                    <button onclick="event.stopPropagation(); window.addSeguimento()" class="bg-white text-blue-600 px-4 py-2 rounded-xl text-xs font-black">+ SEGUIMENTO</button>
-                </div>
-                <div id="slot-planejamento" class="slot-content">
-                    <div class="table-container">
-                        <table class="w-full text-left text-base uppercase font-bold">
-                            <thead class="bg-slate-50 text-slate-400 border-b">
-                                <tr>
-                                    <th class="p-4">Seguimento</th>
-                                    <th class="p-4 text-center">Meta %</th>
-                                    <th class="p-4 text-center">Atual %</th>
-                                    <th class="p-4 text-right">Patrimônio</th>
-                                    <th class="p-4 text-right">Aportar</th>
-                                    <th class="p-4 text-center">Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tabelaPlanejamento" class="divide-y divide-slate-100 bg-white"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div class="glass rounded-[2.5rem] shadow-xl overflow-hidden">
-                <div class="bg-slate-800 p-5 text-white font-black uppercase text-sm">ATIVOS NESTA CATEGORIA</div>
-                <div class="table-container">
-                    <table class="w-full text-left text-base uppercase font-bold">
-                        <thead class="bg-slate-50 text-slate-400 border-b">
-                            <tr>
-                                <th class="p-4">Ativo</th>
-                                <th class="p-4">Seguimento</th>
-                                <th class="p-4 text-center">Qtd</th>
-                                <th class="p-4 text-center">Preço</th>
-                                <th class="p-4 text-center">Peso %</th>
-                                <th class="p-4 text-right">Total</th>
-                                <th class="p-4 text-center">Ação</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabelaAtivosDetalhe" class="divide-y divide-slate-100 bg-white"></tbody>
-                    </table>
-                </div>
-            </div>
+        <div class="glass rounded-[2rem] shadow-2xl overflow-hidden">
+            <table class="w-full text-left text-sm font-bold uppercase">
+                <thead class="bg-slate-100/50 text-slate-400 border-b">
+                    <tr>
+                        <th class="p-5 text-center">Ver</th>
+                        <th class="p-5">Categoria</th>
+                        <th class="p-5 text-center">Meta %</th>
+                        <th class="p-5 text-center">Atual %</th>
+                        <th class="p-5 text-right">Valor</th>
+                    </tr>
+                </thead>
+                <tbody id="tabelaCorpo" class="divide-y divide-slate-100 bg-white"></tbody>
+            </table>
         </div>
     </main>
 
-    <div id="modalAtivo" class="fixed inset-0 flex items-center justify-center z-[100] opacity-0 pointer-events-none transition-all p-4">
-        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="window.toggleModal('modalAtivo')"></div>
-        <div class="bg-white w-full max-w-sm rounded-[3rem] p-8 relative z-[110] shadow-2xl">
-            <h2 class="text-2xl font-black mb-6 uppercase text-center text-blue-600 italic">Novo Ativo</h2>
+    <div id="modalDetalhes" class="pointer-events-none">
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="toggleModal('modalDetalhes')"></div>
+        <div class="glass w-full max-w-lg p-8 rounded-[2.5rem] relative z-10 shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h2 id="tituloDetalhe" class="text-2xl font-black italic text-blue-600 uppercase">Ativos</h2>
+                <button onclick="toggleModal('modalDetalhes')" class="text-slate-400 font-bold uppercase text-xs">Fechar X</button>
+            </div>
+            <div id="corpoDetalhes" class="space-y-3 max-h-96 overflow-y-auto pr-2"></div>
+        </div>
+    </div>
+// === Modal para adicionar novo ativo ===
+<div id="modalAtivo" class="pointer-events-none opacity-0">
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="toggleModal('modalAtivo')"></div>
+        <div class="bg-white w-full max-w-sm p-8 rounded-[2.5rem] relative z-10 shadow-2xl border-t-8 border-blue-600">
+            <h2 class="text-xl font-black mb-6 uppercase text-center text-blue-600 italic">Novo Ativo</h2>
             <form id="formInvestimento" class="space-y-4">
-                <div class="relative">
-                    <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block ml-4">Ticker (B3 ou Exterior)</label>
-                    <input type="text" id="ticker" placeholder="EX: PETR4 OU CVX..." class="w-full bg-slate-50 border-2 p-4 rounded-2xl font-black uppercase outline-none focus:border-blue-600" autocomplete="off" required>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-2">1. Escolha a Categoria</label>
+                    <select id="categoria_select" class="w-full bg-slate-50 border-2 p-3 rounded-xl font-bold uppercase outline-none focus:border-blue-600" required>
+                        <option value="" disabled selected>Selecionar...</option>
+                    </select>
+                </div>
+
+                <div class="space-y-1 relative">
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-2">2. Ticker do Ativo</label>
+                    <input type="text" id="ticker" placeholder="EX: AAPL OU PETR4" class="w-full bg-slate-50 border-2 p-3 rounded-xl font-black uppercase outline-none focus:border-blue-600" autocomplete="off" required>
+                    
                     <div id="suggestions" class="suggestions-box"></div>
                 </div>
-                <select id="categoria_select" class="w-full bg-slate-50 border-2 p-4 rounded-2xl font-bold uppercase outline-none mb-2"></select>
+
                 <div class="grid grid-cols-2 gap-3">
-                    <input type="number" step="any" id="quantidade_input" placeholder="QTD" class="w-full bg-slate-50 border-2 p-4 rounded-2xl font-black" required>
-                    <input type="text" id="valor_unit_input" placeholder="PREÇO" class="w-full bg-slate-50 border-2 p-4 rounded-2xl font-black text-blue-600" required>
+                    <div class="space-y-1">
+                        <input type="number" step="any" id="quantidade_input" placeholder="QTD" class="w-full bg-slate-50 border-2 p-3 rounded-xl font-black outline-none" required>
+                    </div>
+                    <div class="space-y-1">
+                        <input type="text" id="valor_unit_input" placeholder="PREÇO" class="w-full bg-slate-50 border-2 p-3 rounded-xl font-black text-blue-600 outline-none" required>
+                    </div>
                 </div>
-                <button type="submit" class="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase mt-4 shadow-lg">Salvar Ativo</button>
+
+                <button type="submit" class="w-full bg-blue-600 text-white py-4 rounded-xl font-black uppercase shadow-lg hover:bg-blue-700 transition-all">Salvar Ativo</button>
+                
+                <p class="text-[9px] text-center text-slate-400 font-bold uppercase mt-4 leading-tight">
+                    * Ativos internacionais convertem para R$ automaticamente se a API retornar.
+                </p>
             </form>
         </div>
-    </div>
-
-    <div id="modalCategorias" class="fixed inset-0 flex items-center justify-center z-[100] opacity-0 pointer-events-none transition-all p-4">
-        <div class="absolute inset-0 bg-slate-900/60" onclick="window.toggleModal('modalCategorias')"></div>
-        <div class="bg-white w-full max-w-sm rounded-[2.5rem] p-8 relative z-[110]">
-            <h2 class="text-xl font-black mb-4 uppercase text-center italic">Categorias</h2>
-            <div class="flex gap-2 mb-4">
-                <input type="text" id="nome_nova_categoria" placeholder="NOME" class="flex-1 bg-slate-50 border-2 p-4 rounded-2xl font-bold uppercase">
-                <button id="btn-add-cat" class="bg-blue-600 text-white px-5 rounded-2xl font-black text-xl">+</button>
-            </div>
-            <div id="lista_categorias_edit" class="space-y-2 max-h-64 overflow-y-auto"></div>
-        </div>
-    </div>
-
-    <div id="confirmModal" class="fixed inset-0 flex items-center justify-center z-[500] opacity-0 pointer-events-none transition-all p-6">
-        <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onclick="window.closeConfirm()"></div>
-        <div class="bg-white w-full max-w-xs rounded-[2rem] p-8 relative z-[510] text-center shadow-2xl">
-            <h3 id="confirmTitle" class="font-black text-slate-800 uppercase text-lg mb-2">Atenção</h3>
-            <p id="confirmMessage" class="text-slate-500 text-xs font-bold uppercase mb-8"></p>
-            <div class="flex gap-3">
-                <button onclick="window.closeConfirm()" class="flex-1 bg-slate-100 text-slate-500 py-3 rounded-xl font-black text-xs">Sair</button>
-                <button id="btnConfirmAction" class="flex-1 bg-red-500 text-white py-3 rounded-xl font-black text-xs">Confirmar</button>
-            </div>
-        </div>
-    </div>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, push, onValue, remove, set, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyCaVDJ4LtJu-dlvSi4QrDygfhx1hBGSdDM",
-            authDomain: "banco-de-dados-invest.firebaseapp.com",
-            databaseURL: "https://banco-de-dados-invest-default-rtdb.firebaseio.com",
-            projectId: "banco-de-dados-invest"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
-        const BRAPI_TOKEN = "1EG6ybrvNVpDimcMwbtYwn";
-
-        let todosDados = {}, todasMetas = {}, todasCategorias = {}, planejamSetores = {}, categoriaAtiva = null, pendingAction = null;
-
-        const fmtCur = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        const parseReal = (s) => typeof s === 'string' ? parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0 : (parseFloat(s) || 0);
-
-        onValue(ref(db), s => {
-            const d = s.val() || {};
-            todosDados = d.investimentos || {};
-            todasMetas = d.metas || {};
-            planejamSetores = d.planejamento_setores || {};
-            todasCategorias = d.categorias_list || {};
-            renderizarInterface();
-            atualizarListaCategorias();
-        });
-
-        const tickerInput = document.getElementById('ticker');
-        const suggestionsBox = document.getElementById('suggestions');
-        let searchTimeout;
-
-        tickerInput.addEventListener('input', (e) => {
-            clearTimeout(searchTimeout);
-            const q = e.target.value.toUpperCase().trim();
-            if (q.length < 2) { suggestionsBox.style.display = 'none'; return; }
-            searchTimeout = setTimeout(() => executaBuscaBrapi(q), 500);
-        });
-
-        // BUSCA AJUSTADA PARA ATIVOS GLOBAIS
-        async function executaBuscaBrapi(query) {
-            try {
-                // A busca por "list" com search traz ativos de todos os mercados suportados
-                const res = await fetch(`https://brapi.dev/api/quote/list?search=${query}&token=${BRAPI_TOKEN}`);
-                const data = await res.json();
-                let html = "";
-                if (data.stocks) {
-                    data.stocks.slice(0, 10).forEach(s => {
-                        const isIntl = !(/[0-9]/.test(s.stock));
-                        const market = isIntl ? 'USA' : 'B3';
-                        const color = isIntl ? 'text-emerald-500 bg-emerald-50 border-emerald-100' : 'text-blue-500 bg-blue-50 border-blue-100';
-                        html += `
-                        <div class="suggestion-item" onclick="window.selectAsset('${s.stock}')">
-                            <div class="flex justify-between items-center">
-                                <div class="flex flex-col">
-                                    <span class="font-black text-slate-800 text-lg leading-tight">${s.stock}</span>
-                                    <span class="text-[10px] font-bold text-slate-400 truncate w-40">${s.name || ''}</span>
-                                </div>
-                                <span class="${color} text-[9px] font-black px-2 py-1 rounded-md border">${market}</span>
-                            </div>
-                        </div>`;
-                    });
-                }
-                suggestionsBox.innerHTML = html;
-                suggestionsBox.style.display = html ? 'block' : 'none';
-            } catch (err) { console.error(err); }
-        }
-
-        window.selectAsset = async (ticker) => {
-            tickerInput.value = ticker;
-            suggestionsBox.style.display = 'none';
-            const priceField = document.getElementById('valor_unit_input');
-            priceField.value = ""; 
-            priceField.placeholder = "COTANDO...";
-            try {
-                // Mesma chamada direta que a planilha faz
-                const r = await fetch(`https://brapi.dev/api/quote/${ticker}?token=${BRAPI_TOKEN}`);
-                const d = await r.json();
-                if (d.results && d.results[0]) {
-                    const p = d.results[0].regularMarketPrice;
-                    priceField.value = p.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-                    priceField.placeholder = "PREÇO";
-                }
-            } catch (e) { priceField.placeholder = "PREÇO MANUAL"; }
-        };
-
-        function renderizarInterface() {
-            let totalGeral = 0, totalCatAtiva = 0; 
-            const resumo = {};
-            Object.values(todosDados).forEach(a => {
-                const v = (a.quantidade || 0) * (a.valorUnitario || 0);
-                totalGeral += v; resumo[a.categoria] = (resumo[a.categoria] || 0) + v;
-                if (categoriaAtiva && a.categoria === categoriaAtiva) totalCatAtiva += v;
-            });
-            document.getElementById('patrimonio-exibido').innerText = fmtCur(categoriaAtiva ? totalCatAtiva : totalGeral);
-            const corpo = document.getElementById('tabelaCorpo');
-            corpo.innerHTML = "";
-            Object.values(todasCategorias).forEach(cat => {
-                const val = resumo[cat] || 0, meta = todasMetas[cat] || 0;
-                const atual = totalGeral > 0 ? (val / totalGeral * 100) : 0;
-                const sug = Math.max(0, (totalGeral * (meta / 100)) - val);
-                corpo.innerHTML += `<tr>
-                    <td class="p-5 text-center"><button onclick="window.openCat('${cat}')" class="bg-blue-600 text-white w-10 h-10 rounded-xl">🔍</button></td>
-                    <td class="p-5">${cat}</td>
-                    <td class="p-5 text-center"><span contenteditable="true" onblur="window.svMeta('${cat}', this.innerText)" class="bg-blue-50 px-3 py-1 rounded-lg font-black">${meta}</span>%</td>
-                    <td class="p-5 text-center">${atual.toFixed(1)}%</td>
-                    <td class="p-5 text-right font-bold">${fmtCur(val)}</td>
-                    <td class="p-5 text-right font-black ${sug > 1 ? 'text-emerald-500' : 'text-slate-300'}">${sug > 1 ? fmtCur(sug) : '--'}</td>
-                </tr>`;
-            });
-            if (categoriaAtiva) renderizarDetalhes(totalCatAtiva);
-        }
-
-        function renderizarDetalhes(totalCat) {
-            const tPlan = document.getElementById('tabelaPlanejamento'), tAtv = document.getElementById('tabelaAtivosDetalhe');
-            tPlan.innerHTML = ""; tAtv.innerHTML = "";
-            const ativosDaCat = Object.entries(todosDados).filter(([id, a]) => a.categoria === categoriaAtiva).map(([id, a]) => ({ id, ...a, total: a.quantidade * a.valorUnitario }));
-            
-            ativosDaCat.forEach(atv => {
-                const peso = totalCat > 0 ? (atv.total / totalCat * 100) : 0;
-                let opt = `<option value="">ESCOLHER...</option>`;
-                Object.values(planejamSetores[categoriaAtiva] || {}).forEach(s => { opt += `<option value="${s.nome}" ${atv.seguimento === s.nome ? 'selected' : ''}>${s.nome}</option>`; });
-                tAtv.innerHTML += `<tr>
-                    <td class="p-4 font-black">${atv.ticker}</td>
-                    <td class="p-4"><select onchange="window.updateAtv('${atv.id}', 'seguimento', this.value)" class="bg-slate-100 p-2 rounded-lg text-xs w-full font-bold outline-none">${opt}</select></td>
-                    <td class="p-4 text-center"><span contenteditable="true" onblur="window.updateAtv('${atv.id}', 'quantidade', this.innerText)" class="bg-slate-50 px-3 py-1 rounded font-black">${atv.quantidade}</span></td>
-                    <td class="p-4 text-center font-bold">${fmtCur(atv.valorUnitario)}</td>
-                    <td class="p-4 text-center text-blue-600">${peso.toFixed(1)}%</td>
-                    <td class="p-4 text-right font-black italic">${fmtCur(atv.total)}</td>
-                    <td class="p-4 text-center"><button onclick="window.askRmAtv('${atv.id}', '${atv.ticker}')" class="text-rose-400">✕</button></td>
-                </tr>`;
-            });
-
-            Object.entries(planejamSetores[categoriaAtiva] || {}).forEach(([sid, s]) => {
-                const val = ativosDaCat.filter(a => a.seguimento === s.nome).reduce((acc, a) => acc + a.total, 0);
-                const atual = totalCat > 0 ? (val / totalCat * 100) : 0;
-                const sug = Math.max(0, (totalCat * (s.meta / 100)) - val);
-                tPlan.innerHTML += `<tr>
-                    <td class="p-4 font-bold">${s.nome}</td>
-                    <td class="p-4 text-center"><span contenteditable="true" onblur="window.updateSeg('${sid}', 'meta', this.innerText)" class="bg-blue-50 px-3 py-1 rounded font-black">${s.meta}</span>%</td>
-                    <td class="p-4 text-center">${atual.toFixed(1)}%</td>
-                    <td class="p-4 text-right">${fmtCur(val)}</td>
-                    <td class="p-4 text-right text-emerald-500">${sug > 1 ? fmtCur(sug) : '--'}</td>
-                    <td class="p-4 text-center"><button onclick="window.askRmSeg('${sid}', '${s.nome}')" class="text-rose-300 text-[10px]">EXCLUIR</button></td>
-                </tr>`;
-            });
-        }
-
-        window.toggleModal = (id) => { const m = document.getElementById(id); m.classList.toggle('opacity-0'); m.classList.toggle('pointer-events-none'); };
-        window.openCat = (cat) => { categoriaAtiva = cat; document.getElementById('visao-estrategica').classList.add('hidden-view'); document.getElementById('visao-detalhada').classList.remove('hidden-view'); document.getElementById('titulo-categoria-detalhe').innerText = cat; document.getElementById('span-cat-name').innerText = cat; renderizarInterface(); };
-        window.voltarParaCategorias = () => { categoriaAtiva = null; document.getElementById('visao-estrategica').classList.remove('hidden-view'); document.getElementById('visao-detalhada').classList.add('hidden-view'); renderizarInterface(); };
-        window.toggleSlot = () => { document.getElementById('slot-planejamento').classList.toggle('slot-open'); document.getElementById('chevron-icon').classList.toggle('chevron-rotate'); };
-        window.svMeta = (cat, v) => set(ref(db, `metas/${cat}`), parseFloat(v) || 0);
-        window.updateSeg = (id, f, v) => update(ref(db, `planejamento_setores/${categoriaAtiva}/${id}`), { [f]: f === 'meta' ? parseFloat(v) || 0 : v.toUpperCase() });
-        window.updateAtv = (id, f, v) => update(ref(db, `investimentos/${id}`), { [f]: (f === 'quantidade' || f === 'valorUnitario') ? parseReal(v) : v });
-        window.addSeguimento = () => categoriaAtiva && set(push(ref(db, `planejamento_setores/${categoriaAtiva}`)), { nome: "NOVO", meta: 0 });
-        window.closeConfirm = () => { window.toggleModal('confirmModal'); pendingAction = null; };
-        document.getElementById('btnConfirmAction').onclick = () => { pendingAction?.(); window.closeConfirm(); };
-        window.askRmAtv = (id, t) => { document.getElementById('confirmMessage').innerText = `Remover ${t}?`; pendingAction = () => remove(ref(db, `investimentos/${id}`)); window.toggleModal('confirmModal'); };
-        window.askRmSeg = (id, n) => { document.getElementById('confirmMessage').innerText = `Remover ${n}?`; pendingAction = () => remove(ref(db, `planejamento_setores/${categoriaAtiva}/${id}`)); window.toggleModal('confirmModal'); };
-        window.askRmCat = (id, n) => { document.getElementById('confirmMessage').innerText = `Apagar categoria ${n}?`; pendingAction = () => remove(ref(db, `categorias_list/${id}`)); window.toggleModal('confirmModal'); };
-
-        document.getElementById('formInvestimento').onsubmit = (e) => {
-            e.preventDefault();
-            push(ref(db, 'investimentos'), { 
-                ticker: tickerInput.value.toUpperCase(), 
-                categoria: document.getElementById('categoria_select').value, 
-                quantidade: parseFloat(document.getElementById('quantidade_input').value) || 0, 
-                valorUnitario: parseReal(document.getElementById('valor_unit_input').value), 
-                seguimento: "" 
-            });
-            window.toggleModal('modalAtivo'); e.target.reset();
-        };
-
-        document.getElementById('btn-add-cat').onclick = () => {
-            const n = document.getElementById('nome_nova_categoria').value.trim().toUpperCase();
-            if (n) push(ref(db, 'categorias_list'), n); document.getElementById('nome_nova_categoria').value = "";
-        };
-
-        function atualizarListaCategorias() {
-            const sel = document.getElementById('categoria_select'), list = document.getElementById('lista_categorias_edit');
-            if(!sel || !list) return; sel.innerHTML = ""; list.innerHTML = "";
-            Object.entries(todasCategorias).forEach(([id, nome]) => {
-                sel.innerHTML += `<option value="${nome}">${nome}</option>`;
-                list.innerHTML += `<div class="flex justify-between items-center p-4 bg-slate-50 rounded-2xl mb-2 font-black text-xs uppercase"><span>${nome}</span><button onclick="window.askRmCat('${id}', '${nome}')" class="text-rose-500 font-black text-lg">✕</button></div>`;
-            });
-        }
-    </script>
+    </div>// === Fim do Modal ===
+    <script type="module" src="script.js"></script>
 </body>
 </html>
