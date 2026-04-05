@@ -2,89 +2,154 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>PAVÃO INVEST | Private</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-slate-50 text-slate-900 min-h-screen">
+<body class="text-slate-900 min-h-screen pb-10">
 
     <nav class="gradient-bg p-5 text-white shadow-2xl sticky top-0 z-40">
         <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-black italic uppercase tracking-tighter">PAVÃO INVEST | PRIVATE</h1>
-            <button onclick="toggleModal('modalAtivo')" class="bg-blue-600 px-4 py-2 rounded-xl font-bold text-xs uppercase hover:bg-blue-700">+ Novo Ativo</button>
+            <div class="flex flex-col">
+                <div class="flex items-center gap-2 mb-1">
+                    <div id="sync-indicator"></div>
+                    <span id="update-status" class="text-[9px] font-bold uppercase tracking-widest text-emerald-400">Sistema Online</span>
+                </div>
+                <h1 class="text-lg md:text-xl font-black italic uppercase tracking-tighter">PAVÃO INVEST | PRIVATE</h1>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="toggleModal('modalAtivo')" class="bg-blue-600 px-3 py-2 rounded-xl font-bold text-[10px] uppercase text-white">+ Novo Ativo</button>
+            </div>
         </div>
     </nav>
 
-    <main class="container mx-auto mt-8 p-4">
-        <div class="glass p-6 rounded-[2rem] shadow-xl mb-8 inline-block">
-            <p class="text-slate-400 text-[10px] font-black uppercase mb-1">Patrimônio Consolidado</p>
-            <h2 id="patrimonio-exibido" class="text-3xl font-black italic italic tracking-tighter">R$ 0,00</h2>
+    <main class="container mx-auto mt-6 p-4">
+        <div class="flex flex-col md:flex-row gap-4 mb-8">
+            <div class="glass p-5 rounded-3xl shadow-lg border-l-4 border-blue-600 min-w-[240px]">
+                <p class="text-slate-400 text-[9px] font-black uppercase mb-1 tracking-widest">Patrimônio Consolidado</p>
+                <h2 id="patrimonio-exibido" class="text-2xl font-black text-slate-800 tracking-tighter italic">R$ 0,00</h2>
+            </div>
         </div>
 
-        <div class="glass rounded-[2rem] shadow-2xl overflow-hidden">
-            <table class="w-full text-left text-sm font-bold uppercase">
-                <thead class="bg-slate-100/50 text-slate-400 border-b">
-                    <tr>
-                        <th class="p-5 text-center">Ver</th>
-                        <th class="p-5">Categoria</th>
-                        <th class="p-5 text-center">Meta %</th>
-                        <th class="p-5 text-center">Atual %</th>
-                        <th class="p-5 text-right">Valor</th>
-                    </tr>
-                </thead>
-                <tbody id="tabelaCorpo" class="divide-y divide-slate-100 bg-white"></tbody>
-            </table>
+        <div id="visao-estrategica" class="space-y-4">
+            <div class="glass rounded-[2rem] shadow-xl overflow-hidden">
+                <div class="table-container">
+                    <table id="tabela-categorias" class="w-full text-left text-sm uppercase font-bold">
+                        <thead class="bg-slate-50 text-slate-400 border-b">
+                            <tr>
+                                <th class="p-4 w-16 text-center">Ver</th>
+                                <th class="p-4">Categoria ⇅</th>
+                                <th class="p-4 text-center">Meta % ⇅</th>
+                                <th class="p-4 text-center">Atual % ⇅</th>
+                                <th class="p-4 text-right">Valor Investido ⇅</th>
+                                <th class="p-4 text-right text-emerald-600">Sugestão ⇅</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaCorpo" class="divide-y divide-slate-100 bg-white"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="visao-detalhada" class="hidden-view space-y-6">
+            <div class="flex items-center gap-3">
+                <button onclick="voltarParaCategorias()" class="bg-white px-4 py-2 rounded-xl font-black shadow-sm border border-slate-200 text-xs text-slate-500 hover:bg-slate-50 transition-colors">← VOLTAR</button>
+                <h3 id="titulo-categoria-detalhe" class="font-black uppercase text-xl text-blue-600 italic"></h3>
+            </div>
+            
+            <div class="glass rounded-[2rem] shadow-xl overflow-hidden border border-blue-100">
+                <div onclick="toggleSlot()" class="bg-blue-600 p-4 text-white font-black uppercase text-xs flex justify-between items-center cursor-pointer">
+                    <div class="flex items-center gap-3">
+                        <span id="chevron-icon" class="chevron">▼</span>
+                        <span>PLANEJAMENTO: <span id="span-cat-name"></span></span>
+                    </div>
+                    <button onclick="event.stopPropagation(); addSeguimento()" class="bg-white text-blue-600 px-3 py-1 rounded-lg text-[10px] font-black">+ SEGUIMENTO</button>
+                </div>
+                <div id="slot-planejamento" class="slot-content">
+                    <div class="table-container">
+                        <table id="tabela-planejamento" class="w-full text-left text-sm uppercase font-bold">
+                            <thead class="bg-slate-50 text-slate-400 border-b">
+                                <tr>
+                                    <th class="p-4">Seguimento ⇅</th>
+                                    <th class="p-4 text-center">Meta % ⇅</th>
+                                    <th class="p-4 text-center">Atual % ⇅</th>
+                                    <th class="p-4 text-right">Patrimônio ⇅</th>
+                                    <th class="p-4 text-right">Aportar ⇅</th>
+                                    <th class="p-4 text-center">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaPlanejamento" class="divide-y divide-slate-100 bg-white"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass rounded-[2rem] shadow-xl overflow-hidden">
+                <div class="bg-slate-800 p-4 text-white font-black uppercase text-xs">ATIVOS NESTA CATEGORIA</div>
+                <div class="table-container">
+                    <table id="tabela-ativos" class="w-full text-left text-sm uppercase font-bold">
+                        <thead class="bg-slate-50 text-slate-400 border-b">
+                            <tr>
+                                <th class="p-4">Ativo ⇅</th>
+                                <th class="p-4">Seguimento ⇅</th>
+                                <th class="p-4 text-center">Qtd ⇅</th>
+                                <th class="p-4 text-center">Preço ⇅</th>
+                                <th class="p-4 text-center">Peso % ⇅</th>
+                                <th class="p-4 text-right">Total ⇅</th>
+                                <th class="p-4 text-center">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaAtivosDetalhe" class="divide-y divide-slate-100 bg-white"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </main>
 
-    <div id="modalDetalhes" class="pointer-events-none">
-        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="toggleModal('modalDetalhes')"></div>
-        <div class="glass w-full max-w-lg p-8 rounded-[2.5rem] relative z-10 shadow-2xl">
-            <div class="flex justify-between items-center mb-6">
-                <h2 id="tituloDetalhe" class="text-2xl font-black italic text-blue-600 uppercase">Ativos</h2>
-                <button onclick="toggleModal('modalDetalhes')" class="text-slate-400 font-bold uppercase text-xs">Fechar X</button>
-            </div>
-            <div id="corpoDetalhes" class="space-y-3 max-h-96 overflow-y-auto pr-2"></div>
-        </div>
-    </div>
-// === Modal para adicionar novo ativo ===
-<div id="modalAtivo" class="pointer-events-none opacity-0">
+    <div id="modalAtivo" class="fixed inset-0 flex items-center justify-center z-[100] opacity-0 pointer-events-none transition-all p-4">
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="toggleModal('modalAtivo')"></div>
-        <div class="bg-white w-full max-w-sm p-8 rounded-[2.5rem] relative z-10 shadow-2xl border-t-8 border-blue-600">
+        <div class="bg-white w-full max-w-sm rounded-[2.5rem] p-8 relative z-[110] shadow-2xl">
             <h2 class="text-xl font-black mb-6 uppercase text-center text-blue-600 italic">Novo Ativo</h2>
             <form id="formInvestimento" class="space-y-4">
-                <div class="space-y-1">
-                    <label class="text-[10px] font-black text-slate-400 uppercase ml-2">1. Escolha a Categoria</label>
-                    <select id="categoria_select" class="w-full bg-slate-50 border-2 p-3 rounded-xl font-bold uppercase outline-none focus:border-blue-600" required>
-                        <option value="" disabled selected>Selecionar...</option>
-                    </select>
-                </div>
-
-                <div class="space-y-1 relative">
-                    <label class="text-[10px] font-black text-slate-400 uppercase ml-2">2. Ticker do Ativo</label>
-                    <input type="text" id="ticker" placeholder="EX: AAPL OU PETR4" class="w-full bg-slate-50 border-2 p-3 rounded-xl font-black uppercase outline-none focus:border-blue-600" autocomplete="off" required>
-                    
+                <div class="relative">
+                    <input type="text" id="ticker" placeholder="TICKER (EX: AAPL ou PETR4)" class="w-full bg-slate-50 border-2 p-3 rounded-xl font-black uppercase outline-none focus:border-blue-600" autocomplete="off" required>
                     <div id="suggestions" class="suggestions-box"></div>
                 </div>
-
+                <select id="categoria_select" class="w-full bg-slate-50 border-2 p-3 rounded-xl font-bold uppercase outline-none"></select>
                 <div class="grid grid-cols-2 gap-3">
-                    <div class="space-y-1">
-                        <input type="number" step="any" id="quantidade_input" placeholder="QTD" class="w-full bg-slate-50 border-2 p-3 rounded-xl font-black outline-none" required>
-                    </div>
-                    <div class="space-y-1">
-                        <input type="text" id="valor_unit_input" placeholder="PREÇO" class="w-full bg-slate-50 border-2 p-3 rounded-xl font-black text-blue-600 outline-none" required>
-                    </div>
+                    <input type="number" step="any" id="quantidade_input" placeholder="QTD" class="w-full bg-slate-50 border-2 p-3 rounded-xl font-black" required>
+                    <input type="text" id="valor_unit_input" placeholder="PREÇO" class="w-full bg-slate-50 border-2 p-3 rounded-xl font-black text-blue-600" required>
                 </div>
-
-                <button type="submit" class="w-full bg-blue-600 text-white py-4 rounded-xl font-black uppercase shadow-lg hover:bg-blue-700 transition-all">Salvar Ativo</button>
-                
-                <p class="text-[9px] text-center text-slate-400 font-bold uppercase mt-4 leading-tight">
-                    * Ativos internacionais convertem para R$ automaticamente se a API retornar.
-                </p>
+                <button type="submit" class="w-full bg-blue-600 text-white py-4 rounded-xl font-black uppercase mt-4 shadow-lg">Salvar Ativo</button>
             </form>
         </div>
-    </div>// === Fim do Modal ===
+    </div>
+
+    <div id="modalCategorias" class="fixed inset-0 flex items-center justify-center z-[100] opacity-0 pointer-events-none transition-all p-4">
+        <div class="absolute inset-0 bg-slate-900/60" onclick="toggleModal('modalCategorias')"></div>
+        <div class="bg-white w-full max-w-sm rounded-[2rem] p-8 relative z-[110]">
+            <h2 class="text-lg font-black mb-4 uppercase text-center italic">Categorias</h2>
+            <div class="flex gap-2 mb-4">
+                <input type="text" id="nome_nova_categoria" placeholder="NOME" class="flex-1 bg-slate-50 border-2 p-3 rounded-xl font-bold uppercase">
+                <button id="btn-add-cat" class="bg-blue-600 text-white px-4 rounded-xl font-black text-lg">+</button>
+            </div>
+            <div id="lista_categorias_edit" class="space-y-2 max-h-64 overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <div id="confirmModal" class="fixed inset-0 flex items-center justify-center z-[500] opacity-0 pointer-events-none transition-all p-6">
+        <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onclick="closeConfirm()"></div>
+        <div class="bg-white w-full max-w-xs rounded-3xl p-8 relative z-[510] text-center shadow-2xl">
+            <h3 class="font-black text-slate-800 uppercase text-md mb-2">Confirmar Exclusão?</h3>
+            <p id="confirmMessage" class="text-slate-500 text-[10px] font-bold uppercase mb-8"></p>
+            <div class="flex gap-3">
+                <button onclick="closeConfirm()" class="flex-1 bg-slate-100 text-slate-500 py-3 rounded-xl font-black text-xs">Não</button>
+                <button id="btnConfirmAction" class="flex-1 bg-red-500 text-white py-3 rounded-xl font-black text-xs">Sim</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="script.js"></script>
 </body>
 </html>
