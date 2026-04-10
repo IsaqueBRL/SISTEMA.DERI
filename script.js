@@ -23,11 +23,52 @@ const CATEGORIAS_INTERNACIONAIS = ["STOKS", "REITS", "ETF EXTERIOR", "CRIPTOMOED
 let todosDados = {}, todasMetas = {}, planejamSetores = {}, categoriaAtiva = null, pendingAction = null;
 let cotacaoDolar = 0;
 
+// Estado de ordenação por tabela
+const sortState = {
+    categorias: { col: -1, asc: true },
+    ativos: { col: -1, asc: true },
+    planejamento: { col: -1, asc: true }
+};
+
+// Ordena array de linhas por coluna
+function sortRows(rows, colIndex, asc) {
+    return [...rows].sort((a, b) => {
+        const va = a.children[colIndex]?.innerText.trim() || '';
+        const vb = b.children[colIndex]?.innerText.trim() || '';
+        const na = parseFloat(va.replace(/[^\d,.-]/g, '').replace(',', '.'));
+        const nb = parseFloat(vb.replace(/[^\d,.-]/g, '').replace(',', '.'));
+        const isNum = !isNaN(na) && !isNaN(nb);
+        if (isNum) return asc ? na - nb : nb - na;
+        return asc ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR');
+    });
+}
+
+window.sortTable = (tbodyId, stateKey, colIndex) => {
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
+    const state = sortState[stateKey];
+    if (state.col === colIndex) { state.asc = !state.asc; }
+    else { state.col = colIndex; state.asc = true; }
+    const sorted = sortRows([...tbody.rows], colIndex, state.asc);
+    sorted.forEach(r => tbody.appendChild(r));
+    // Atualiza ícones nos headers
+    const thead = tbody.closest('table').querySelector('thead');
+    if (thead) {
+        [...thead.querySelectorAll('th')].forEach((th, i) => {
+            th.dataset.sortIdx = i;
+            const base = th.innerText.replace(/ [▲▼↕]$/, '');
+            if (i === colIndex) { th.innerText = base + (state.asc ? ' ▲' : ' ▼'); }
+            else { th.innerText = base.replace(/ ⇅$/, '') + ' ⇅'; }
+        });
+    }
+};
+
 const fmtCur = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtUSD = (v) => '$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const parseReal = (s) => typeof s === 'number' ? s : parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
 
 // --- BUSCA COTAÇÃO DO DÓLAR ---
+// Usa o par USDBRL=X que retorna quantos BRL valem 1 USD
 async function buscarCotacaoDolar() {
     try {
         const r = await fetch(`https://brapi.dev/api/quote/USDBRL=X?token=${BRAPI_TOKEN}`);
@@ -37,82 +78,67 @@ async function buscarCotacaoDolar() {
         }
     } catch(e) { console.error("Erro ao buscar dólar:", e); }
 }
-buscarCotacaoDolar();
 
-// --- ATUALIZAÇÃO AUTOMÁTICA DE PREÇOS ---
-// Regra 1: Executa ao abrir o site
-// Regra 2: Repete a cada 10 minutos enquanto o site estiver aberto
-const INTERVALO_ATUALIZACAO = 10 * 60 * 1000; // 10 minutos em ms
+// --- ATUALIZAÇÃO AUTOMÁTICA DE PREÇOS E DÓLAR ---
+const INTERVALO_ATUALIZACAO = 10 * 60 * 1000; // 10 minutos
 
 async function atualizarTodosOsPrecos() {
-    const ativos = Object.entries(todosDados);
-    if (ativos.length === 0) return;
-
-    // Atualiza status na navbar
     const indicator = document.getElementById('sync-indicator');
     const statusEl = document.getElementById('update-status');
     if (indicator) indicator.classList.add('updating');
-    if (statusEl) statusEl.innerText = 'Atualizando preços...';
 
-    // Coleta tickers únicos por grupo (BR e Internacional)
-    const tickersBR = [], tickersIntl = [];
-    ativos.forEach(([, a]) => {
-        const ehIntl = CATEGORIAS_INTERNACIONAIS.includes(a.categoria);
-        if (ehIntl) { if (!tickersIntl.includes(a.ticker)) tickersIntl.push(a.ticker); }
-        else { if (!tickersBR.includes(a.ticker)) tickersBR.push(a.ticker); }
-    });
-
-    const precos = {}; // { TICKER: preco }
-
-    // Busca BR em lote
-    if (tickersBR.length > 0) {
-        try {
-            const r = await fetch(`https://brapi.dev/api/quote/${tickersBR.join(',')}?token=${BRAPI_TOKEN}`);
-            const d = await r.json();
-            if (d.results) d.results.forEach(item => { precos[item.symbol] = item.regularMarketPrice; });
-        } catch(e) { console.error("Erro ao atualizar preços BR:", e); }
-    }
-
-    // Busca Internacional em lote
-    if (tickersIntl.length > 0) {
-        try {
-            const r = await fetch(`https://brapi.dev/api/quote/${tickersIntl.join(',')}?token=${BRAPI_TOKEN}`);
-            const d = await r.json();
-            if (d.results) d.results.forEach(item => { precos[item.symbol] = item.regularMarketPrice; });
-        } catch(e) { console.error("Erro ao atualizar preços Intl:", e); }
-    }
-
-    // Atualiza o Firebase com os novos preços
-    const updates = {};
-    ativos.forEach(([id, a]) => {
-        if (precos[a.ticker] !== undefined) {
-            updates[`investimentos/${id}/valorUnitario`] = precos[a.ticker];
-        }
-    });
-
-    if (Object.keys(updates).length > 0) {
-        try {
-            await update(ref(db), updates);
-        } catch(e) { console.error("Erro ao salvar preços no Firebase:", e); }
-    }
-
-    // Atualiza também a cotação do dólar junto
+    // 1. Atualiza dólar PRIMEIRO (sempre, mesmo sem ativos internacionais)
+    if (statusEl) statusEl.innerText = 'Atualizando câmbio...';
     await buscarCotacaoDolar();
 
-    // Restaura status
+    // 2. Atualiza ativos ativo por ativo
+    const ativos = Object.entries(todosDados);
+    if (ativos.length > 0) {
+        const tickersUnicos = [...new Set(ativos.map(([, a]) => a.ticker))];
+        const precos = {};
+        const total = tickersUnicos.length;
+
+        for (let i = 0; i < tickersUnicos.length; i++) {
+            const ticker = tickersUnicos[i];
+            if (statusEl) statusEl.innerText = `Atualizando ${i + 1}/${total}: ${ticker}`;
+            try {
+                const r = await fetch(`https://brapi.dev/api/quote/${ticker}?token=${BRAPI_TOKEN}`);
+                const d = await r.json();
+                if (d.results && d.results[0]) {
+                    precos[d.results[0].symbol] = d.results[0].regularMarketPrice;
+                }
+            } catch(e) { console.error(`Erro ao buscar ${ticker}:`, e); }
+
+            if (i < tickersUnicos.length - 1) {
+                await new Promise(res => setTimeout(res, 800));
+            }
+        }
+
+        const updates = {};
+        ativos.forEach(([id, a]) => {
+            if (precos[a.ticker] !== undefined) {
+                updates[`investimentos/${id}/valorUnitario`] = precos[a.ticker];
+            }
+        });
+        if (Object.keys(updates).length > 0) {
+            try { await update(ref(db), updates); }
+            catch(e) { console.error("Erro ao salvar preços:", e); }
+        }
+    }
+
+    // Atualiza interface com cotação nova (re-render)
+    renderizarInterface();
+
     const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     if (indicator) indicator.classList.remove('updating');
     if (statusEl) statusEl.innerText = `Atualizado às ${agora}`;
-
-    // Volta ao texto padrão após 5 segundos
     setTimeout(() => { if (statusEl) statusEl.innerText = 'Sistema Online'; }, 5000);
 }
 
-// Executa ao carregar (aguarda Firebase sincronizar primeiro)
-// O onValue já dispara ao conectar, então rodamos após o primeiro sync
-let primeiroSyncFeito = false;
+// Busca o dólar imediatamente ao carregar, sem esperar Firebase
+buscarCotacaoDolar();
 
-// Intervalo de 10 minutos
+let primeiroSyncFeito = false;
 setInterval(atualizarTodosOsPrecos, INTERVALO_ATUALIZACAO);
 
 // --- NAVEGAÇÃO ---
@@ -121,15 +147,24 @@ window.toggleModal = (id) => {
     if(m) {
         m.classList.toggle('opacity-0');
         m.classList.toggle('pointer-events-none');
-        // Ao abrir o modal de novo ativo, garante estado bloqueado
-        if (id === 'modalAtivo' && !m.classList.contains('opacity-0')) {
+        // Sempre que o modal de novo ativo for fechado OU aberto: reset completo
+        if (id === 'modalAtivo') {
             const overlay = document.getElementById('lock-overlay');
             const btn = document.getElementById('btn-salvar-ativo');
+            const sel = document.getElementById('categoria_select');
+            const form = document.getElementById('formInvestimento');
             if (overlay) overlay.style.display = 'flex';
             if (btn) {
                 btn.disabled = true;
                 btn.className = 'w-full bg-slate-300 text-slate-500 py-4 rounded-xl font-black uppercase mt-4 shadow-lg cursor-not-allowed transition-all';
             }
+            if (sel) sel.value = '';         // Volta para "SELECIONAR"
+            if (form) form.reset();           // Limpa todos os campos
+            const totalEl = document.getElementById('total_calculado');
+            if (totalEl) totalEl.innerText = 'R$ 0,00';
+            const suggBox = document.getElementById('suggestions');
+            if (suggBox) suggBox.style.display = 'none';
+            atualizarStepQtd();
         }
     }
 };
@@ -284,17 +319,33 @@ window.renderizarInterface = () => {
             const sugestao = Math.max(0, objetivoVal - valAtual);
 
             corpo.innerHTML += `<tr>
-                <td class="p-4 text-center"><button onclick="openCat('${cat}')" class="bg-blue-600 text-white w-8 h-8 rounded-lg text-xs">🔍</button></td>
-                <td class="p-4">${cat}</td>
-                <td class="p-4 text-center"><span contenteditable="true" onblur="svMeta('${cat}', this.innerText)" class="bg-blue-50 px-2 py-1 rounded font-black">${metaPct}</span>%</td>
-                <td class="p-4 text-center ${atualPct < metaPct ? 'text-rose-500' : 'text-emerald-600'}">${atualPct.toFixed(1)}%</td>
-                <td class="p-4 text-right font-bold">${fmtCur(valAtual)}</td>
-                <td class="p-4 text-right font-black ${sugestao > 1 ? 'text-emerald-500' : 'text-slate-300'}">${sugestao > 1 ? fmtCur(sugestao) : '--'}</td>
+                <td class="p-4 text-center"><button onclick="openCat('${cat}')" class="bg-blue-600 text-white w-9 h-9 rounded-xl text-sm font-black shadow hover:bg-blue-700 transition-colors">🔍</button></td>
+                <td class="p-4 font-black text-slate-800 text-sm">${cat}</td>
+                <td class="p-4 text-center"><span contenteditable="true" onblur="svMeta('${cat}', this.innerText)" class="bg-blue-100 text-blue-700 px-3 py-1 rounded-lg font-black text-sm">${metaPct}</span><span class="text-slate-500 font-bold ml-1">%</span></td>
+                <td class="p-4 text-center font-black text-base ${atualPct < metaPct ? 'text-rose-500' : 'text-emerald-600'}">${atualPct.toFixed(1)}%</td>
+                <td class="p-4 text-right font-bold text-slate-700 text-sm">${fmtCur(valAtual)}</td>
+                <td class="p-4 text-right font-black text-sm ${sugestao > 1 ? 'text-emerald-500' : 'text-slate-300'}">${sugestao > 1 ? fmtCur(sugestao) : '--'}</td>
             </tr>`;
         }
     });
 
     if (categoriaAtiva) renderizarDetalhes(totalCatAtiva);
+
+    // Rodapé de soma de metas — tabela de categorias
+    const tfoot = document.getElementById('tfoot-categorias');
+    if (tfoot) {
+        const somasMetas = CATEGORIAS_DEFINIDAS.reduce((acc, cat) => {
+            return acc + (todasMetas[cat] || 0);
+        }, 0);
+        const falta = 100 - somasMetas;
+        const cor = Math.abs(falta) < 0.01 ? 'text-emerald-600' : falta > 0 ? 'text-amber-500' : 'text-rose-500';
+        const msg = Math.abs(falta) < 0.01 ? '✔ 100% alocado' : falta > 0 ? `⚠ Faltam ${falta.toFixed(1)}%` : `⚠ Excesso de ${Math.abs(falta).toFixed(1)}%`;
+        tfoot.innerHTML = `<tr>
+            <td colspan="2" class="p-3 text-xs font-black text-slate-400 uppercase tracking-wider">SOMA DAS METAS</td>
+            <td class="p-3 text-center font-black text-sm ${cor}">${somasMetas.toFixed(1)}% <span class="text-xs ml-1">${msg}</span></td>
+            <td colspan="3"></td>
+        </tr>`;
+    }
 };
 
 // --- DETALHES DA CATEGORIA ---
@@ -312,25 +363,25 @@ function renderizarDetalhes(totalCat) {
         dolarBadge.classList.remove('hidden');
         dolarBadge.innerText = cotacaoDolar > 0 ? `💵 USD = ${fmtCur(cotacaoDolar)}` : '💵 Cotação...';
         thead.innerHTML = `<tr>
-            <th class="p-4">Ativo ⇅</th>
-            <th class="p-4">Seguimento ⇅</th>
-            <th class="p-4 text-center">Qtd ⇅</th>
-            <th class="p-4 text-center text-amber-500">Preço (USD) ⇅</th>
-            <th class="p-4 text-center">Peso % ⇅</th>
-            <th class="p-4 text-right text-amber-500">Total USD ⇅</th>
-            <th class="p-4 text-right text-emerald-600">Total BRL ⇅</th>
-            <th class="p-4 text-center">Ação</th>
+            <th class="p-4 text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',0)">Ativo ⇅</th>
+            <th class="p-4 text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',1)">Seguimento ⇅</th>
+            <th class="p-4 text-center text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',2)">Qtd ⇅</th>
+            <th class="p-4 text-center text-sm text-amber-600 cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',3)">Preço (USD) ⇅</th>
+            <th class="p-4 text-center text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',4)">Peso % ⇅</th>
+            <th class="p-4 text-right text-sm text-amber-600 cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',5)">Total USD ⇅</th>
+            <th class="p-4 text-right text-sm text-emerald-600 cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',6)">Total BRL ⇅</th>
+            <th class="p-4 text-center text-sm">Ação</th>
         </tr>`;
     } else {
         dolarBadge.classList.add('hidden');
         thead.innerHTML = `<tr>
-            <th class="p-4">Ativo ⇅</th>
-            <th class="p-4">Seguimento ⇅</th>
-            <th class="p-4 text-center">Qtd ⇅</th>
-            <th class="p-4 text-center">Preço ⇅</th>
-            <th class="p-4 text-center">Peso % ⇅</th>
-            <th class="p-4 text-right">Total ⇅</th>
-            <th class="p-4 text-center">Ação</th>
+            <th class="p-4 text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',0)">Ativo ⇅</th>
+            <th class="p-4 text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',1)">Seguimento ⇅</th>
+            <th class="p-4 text-center text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',2)">Qtd ⇅</th>
+            <th class="p-4 text-center text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',3)">Preço ⇅</th>
+            <th class="p-4 text-center text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',4)">Peso % ⇅</th>
+            <th class="p-4 text-right text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',5)">Total ⇅</th>
+            <th class="p-4 text-center text-sm">Ação</th>
         </tr>`;
     }
 
@@ -351,24 +402,24 @@ function renderizarDetalhes(totalCat) {
 
         if (ehIntl) {
             tAtv.innerHTML += `<tr>
-                <td class="p-4 font-black">${atv.ticker}</td>
-                <td class="p-4"><select onchange="updateAtv('${atv.id}', 'seguimento', this.value)" class="bg-slate-100 p-1 rounded text-[10px] w-full font-bold outline-none">${opt}</select></td>
-                <td class="p-4 text-center"><span contenteditable="true" onblur="updateAtv('${atv.id}', 'quantidade', this.innerText)" class="bg-slate-50 px-2 py-1 rounded font-black">${atv.quantidade}</span></td>
-                <td class="p-4 text-center font-bold text-amber-600">${fmtUSD(atv.valorUnitario)}</td>
-                <td class="p-4 text-center text-blue-600">${peso.toFixed(1)}%</td>
-                <td class="p-4 text-right font-bold text-amber-500">${fmtUSD(atv.totalUSD)}</td>
-                <td class="p-4 text-right font-black italic text-emerald-600">${fmtCur(atv.totalBRL)}</td>
-                <td class="p-4 text-center"><button onclick="askRmAtv('${atv.id}', '${atv.ticker}')" class="text-rose-400">✕</button></td>
+                <td class="p-4 font-black text-slate-800 text-sm">${atv.ticker}</td>
+                <td class="p-4"><select onchange="updateAtv('${atv.id}', 'seguimento', this.value)" class="bg-slate-100 p-2 rounded-lg text-xs w-full font-bold outline-none border border-slate-200">${opt}</select></td>
+                <td class="p-4 text-center"><span contenteditable="true" onblur="updateAtv('${atv.id}', 'quantidade', this.innerText)" class="bg-slate-100 px-2 py-1 rounded-lg font-black text-sm">${atv.quantidade}</span></td>
+                <td class="p-4 text-center font-bold text-amber-600 text-sm">${fmtUSD(atv.valorUnitario)}</td>
+                <td class="p-4 text-center text-blue-600 font-black text-sm">${peso.toFixed(1)}%</td>
+                <td class="p-4 text-right font-bold text-amber-600 text-sm">${fmtUSD(atv.totalUSD)}</td>
+                <td class="p-4 text-right font-black text-emerald-600 text-sm">${fmtCur(atv.totalBRL)}</td>
+                <td class="p-4 text-center"><button onclick="askRmAtv('${atv.id}', '${atv.ticker}')" class="text-rose-400 hover:text-rose-600 font-black text-lg transition-colors">✕</button></td>
             </tr>`;
         } else {
             tAtv.innerHTML += `<tr>
-                <td class="p-4 font-black">${atv.ticker}</td>
-                <td class="p-4"><select onchange="updateAtv('${atv.id}', 'seguimento', this.value)" class="bg-slate-100 p-1 rounded text-[10px] w-full font-bold outline-none">${opt}</select></td>
-                <td class="p-4 text-center"><span contenteditable="true" onblur="updateAtv('${atv.id}', 'quantidade', this.innerText)" class="bg-slate-50 px-2 py-1 rounded font-black">${atv.quantidade}</span></td>
-                <td class="p-4 text-center font-bold">${fmtCur(atv.valorUnitario)}</td>
-                <td class="p-4 text-center text-blue-600">${peso.toFixed(1)}%</td>
-                <td class="p-4 text-right font-black italic">${fmtCur(atv.totalBRL)}</td>
-                <td class="p-4 text-center"><button onclick="askRmAtv('${atv.id}', '${atv.ticker}')" class="text-rose-400">✕</button></td>
+                <td class="p-4 font-black text-slate-800 text-sm">${atv.ticker}</td>
+                <td class="p-4"><select onchange="updateAtv('${atv.id}', 'seguimento', this.value)" class="bg-slate-100 p-2 rounded-lg text-xs w-full font-bold outline-none border border-slate-200">${opt}</select></td>
+                <td class="p-4 text-center"><span contenteditable="true" onblur="updateAtv('${atv.id}', 'quantidade', this.innerText)" class="bg-slate-100 px-2 py-1 rounded-lg font-black text-sm">${atv.quantidade}</span></td>
+                <td class="p-4 text-center font-bold text-slate-700 text-sm">${fmtCur(atv.valorUnitario)}</td>
+                <td class="p-4 text-center text-blue-600 font-black text-sm">${peso.toFixed(1)}%</td>
+                <td class="p-4 text-right font-black text-slate-800 text-sm">${fmtCur(atv.totalBRL)}</td>
+                <td class="p-4 text-center"><button onclick="askRmAtv('${atv.id}', '${atv.ticker}')" class="text-rose-400 hover:text-rose-600 font-black text-lg transition-colors">✕</button></td>
             </tr>`;
         }
     });
@@ -379,14 +430,29 @@ function renderizarDetalhes(totalCat) {
         const sug = Math.max(0, (totalCat * (s.meta / 100)) - val);
         
         tPlan.innerHTML += `<tr>
-            <td class="p-4 font-bold"><span contenteditable="true" onblur="updateSeg('${sid}', 'nome', this.innerText)">${s.nome}</span></td>
-            <td class="p-4 text-center"><span contenteditable="true" onblur="updateSeg('${sid}', 'meta', this.innerText)" class="bg-blue-50 px-2 py-1 rounded font-black">${s.meta}</span>%</td>
-            <td class="p-4 text-center">${atual.toFixed(1)}%</td>
-            <td class="p-4 text-right">${fmtCur(val)}</td>
-            <td class="p-4 text-right text-emerald-500 font-black">${sug > 1 ? fmtCur(sug) : '--'}</td>
-            <td class="p-4 text-center"><button onclick="askRmSeg('${sid}', '${s.nome}')" class="text-rose-300 text-[10px]">✕</button></td>
+            <td class="p-4 font-bold text-slate-800 text-sm"><span contenteditable="true" onblur="updateSeg('${sid}', 'nome', this.innerText)">${s.nome}</span></td>
+            <td class="p-4 text-center"><span contenteditable="true" onblur="updateSeg('${sid}', 'meta', this.innerText)" class="bg-blue-100 text-blue-700 px-3 py-1 rounded-lg font-black text-sm">${s.meta}</span><span class="text-slate-500 font-bold ml-1">%</span></td>
+            <td class="p-4 text-center font-black text-sm ${atual < s.meta ? 'text-rose-500' : 'text-emerald-600'}">${atual.toFixed(1)}%</td>
+            <td class="p-4 text-right font-bold text-slate-700 text-sm">${fmtCur(val)}</td>
+            <td class="p-4 text-right font-black text-sm ${sug > 1 ? 'text-emerald-500' : 'text-slate-300'}">${sug > 1 ? fmtCur(sug) : '--'}</td>
+            <td class="p-4 text-center"><button onclick="askRmSeg('${sid}', '${s.nome}')" class="text-rose-400 hover:text-rose-600 font-black text-lg transition-colors">✕</button></td>
         </tr>`;
     });
+
+    // Rodapé de soma de metas — tabela de seguimentos
+    const tfootPlan = document.getElementById('tfoot-planejamento');
+    if (tfootPlan) {
+        const setores = Object.values(planejamSetores[categoriaAtiva] || {});
+        const somaMetas = setores.reduce((acc, s) => acc + (s.meta || 0), 0);
+        const falta = 100 - somaMetas;
+        const cor = Math.abs(falta) < 0.01 ? 'text-emerald-600' : falta > 0 ? 'text-amber-500' : 'text-rose-500';
+        const msg = Math.abs(falta) < 0.01 ? '✔ 100% alocado' : falta > 0 ? `⚠ Faltam ${falta.toFixed(1)}%` : `⚠ Excesso de ${Math.abs(falta).toFixed(1)}%`;
+        tfootPlan.innerHTML = setores.length > 0 ? `<tr>
+            <td class="p-3 text-xs font-black text-slate-400 uppercase tracking-wider">SOMA DAS METAS</td>
+            <td class="p-3 text-center font-black text-sm ${cor}">${somaMetas.toFixed(1)}% <span class="text-xs ml-1">${msg}</span></td>
+            <td colspan="4"></td>
+        </tr>` : '';
+    }
 }
 
 // --- PERSISTÊNCIA ---
@@ -440,6 +506,7 @@ document.getElementById('formInvestimento').onsubmit = (e) => {
 function popularSelectCategorias() {
     const sel = document.getElementById('categoria_select');
     if (!sel) return;
-    sel.innerHTML = CATEGORIAS_DEFINIDAS.map(c => `<option value="${c}">${c}</option>`).join("");
+    sel.innerHTML = `<option value="">— SELECIONAR CATEGORIA —</option>` + 
+        CATEGORIAS_DEFINIDAS.map(c => `<option value="${c}">${c}</option>`).join("");
     atualizarStepQtd();
 }

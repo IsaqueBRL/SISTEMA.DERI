@@ -36,17 +36,18 @@
             <div class="glass rounded-[2rem] shadow-xl overflow-hidden">
                 <div class="table-container">
                     <table id="tabela-categorias" class="w-full text-left text-sm uppercase font-bold">
-                        <thead class="bg-slate-50 text-slate-400 border-b">
+                        <thead class="bg-slate-50 text-slate-800 border-b">
                             <tr>
-                                <th class="p-4 w-16 text-center">Ver</th>
-                                <th class="p-4">Categoria ⇅</th>
-                                <th class="p-4 text-center">Meta % ⇅</th>
-                                <th class="p-4 text-center">Atual % ⇅</th>
-                                <th class="p-4 text-right">Valor Investido ⇅</th>
-                                <th class="p-4 text-right text-emerald-600">Sugestão ⇅</th>
+                                <th class="p-4 w-16 text-center text-xs">Ver</th>
+                                <th class="p-4 text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaCorpo','categorias',1)">Categoria ⇅</th>
+                                <th class="p-4 text-center text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaCorpo','categorias',2)">Meta % ⇅</th>
+                                <th class="p-4 text-center text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaCorpo','categorias',3)">Atual % ⇅</th>
+                                <th class="p-4 text-right text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaCorpo','categorias',4)">Valor Investido ⇅</th>
+                                <th class="p-4 text-right text-sm text-emerald-600 cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaCorpo','categorias',5)">Sugestão ⇅</th>
                             </tr>
                         </thead>
                         <tbody id="tabelaCorpo" class="divide-y divide-slate-100 bg-white"></tbody>
+                        <tfoot id="tfoot-categorias" class="bg-slate-50 border-t-2 border-slate-200"></tfoot>
                     </table>
                 </div>
             </div>
@@ -69,17 +70,18 @@
                 <div id="slot-planejamento" class="slot-content">
                     <div class="table-container">
                         <table id="tabela-planejamento" class="w-full text-left text-sm uppercase font-bold">
-                            <thead class="bg-slate-50 text-slate-400 border-b">
+                            <thead class="bg-slate-50 text-slate-800 border-b">
                                 <tr>
-                                    <th class="p-4">Seguimento ⇅</th>
-                                    <th class="p-4 text-center">Meta % ⇅</th>
-                                    <th class="p-4 text-center">Atual % ⇅</th>
-                                    <th class="p-4 text-right">Patrimônio ⇅</th>
-                                    <th class="p-4 text-right">Aportar ⇅</th>
-                                    <th class="p-4 text-center">Ação</th>
+                                    <th class="p-4 text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaPlanejamento','planejamento',0)">Seguimento ⇅</th>
+                                    <th class="p-4 text-center text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaPlanejamento','planejamento',1)">Meta % ⇅</th>
+                                    <th class="p-4 text-center text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaPlanejamento','planejamento',2)">Atual % ⇅</th>
+                                    <th class="p-4 text-right text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaPlanejamento','planejamento',3)">Patrimônio ⇅</th>
+                                    <th class="p-4 text-right text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaPlanejamento','planejamento',4)">Aportar ⇅</th>
+                                    <th class="p-4 text-center text-sm">Ação</th>
                                 </tr>
                             </thead>
                             <tbody id="tabelaPlanejamento" class="divide-y divide-slate-100 bg-white"></tbody>
+                            <tfoot id="tfoot-planejamento" class="bg-slate-50 border-t-2 border-slate-200"></tfoot>
                         </table>
                     </div>
                 </div>
@@ -92,15 +94,15 @@
                 </div>
                 <div class="table-container">
                     <table id="tabela-ativos" class="w-full text-left text-sm uppercase font-bold">
-                        <thead id="thead-ativos" class="bg-slate-50 text-slate-400 border-b">
+                        <thead id="thead-ativos" class="bg-slate-50 text-slate-800 border-b">
                             <tr>
-                                <th class="p-4">Ativo ⇅</th>
-                                <th class="p-4">Seguimento ⇅</th>
-                                <th class="p-4 text-center">Qtd ⇅</th>
-                                <th class="p-4 text-center">Preço ⇅</th>
-                                <th class="p-4 text-center">Peso % ⇅</th>
-                                <th class="p-4 text-right">Total ⇅</th>
-                                <th class="p-4 text-center">Ação</th>
+                                <th class="p-4 text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',0)">Ativo ⇅</th>
+                                <th class="p-4 text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',1)">Seguimento ⇅</th>
+                                <th class="p-4 text-center text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',2)">Qtd ⇅</th>
+                                <th class="p-4 text-center text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',3)">Preço ⇅</th>
+                                <th class="p-4 text-center text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',4)">Peso % ⇅</th>
+                                <th class="p-4 text-right text-sm cursor-pointer hover:bg-blue-50 select-none" onclick="sortTable('tabelaAtivosDetalhe','ativos',5)">Total ⇅</th>
+                                <th class="p-4 text-center text-sm">Ação</th>
                             </tr>
                         </thead>
                         <tbody id="tabelaAtivosDetalhe" class="divide-y divide-slate-100 bg-white"></tbody>
