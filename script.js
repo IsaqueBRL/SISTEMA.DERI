@@ -142,32 +142,7 @@ let primeiroSyncFeito = false;
 setInterval(atualizarTodosOsPrecos, INTERVALO_ATUALIZACAO);
 
 // --- NAVEGAÇÃO ---
-window.toggleModal = (id) => {
-    const m = document.getElementById(id);
-    if(m) {
-        m.classList.toggle('opacity-0');
-        m.classList.toggle('pointer-events-none');
-        // Sempre que o modal de novo ativo for fechado OU aberto: reset completo
-        if (id === 'modalAtivo') {
-            const overlay = document.getElementById('lock-overlay');
-            const btn = document.getElementById('btn-salvar-ativo');
-            const sel = document.getElementById('categoria_select');
-            const form = document.getElementById('formInvestimento');
-            if (overlay) overlay.style.display = 'flex';
-            if (btn) {
-                btn.disabled = true;
-                btn.className = 'w-full bg-slate-300 text-slate-500 py-4 rounded-xl font-black uppercase mt-4 shadow-lg cursor-not-allowed transition-all';
-            }
-            if (sel) sel.value = '';         // Volta para "SELECIONAR"
-            if (form) form.reset();           // Limpa todos os campos
-            const totalEl = document.getElementById('total_calculado');
-            if (totalEl) totalEl.innerText = 'R$ 0,00';
-            const suggBox = document.getElementById('suggestions');
-            if (suggBox) suggBox.style.display = 'none';
-            atualizarStepQtd();
-        }
-    }
-};
+// toggleModal definido abaixo junto com o sistema de transações
 
 window.closeConfirm = () => { window.toggleModal('confirmModal'); pendingAction = null; };
 
@@ -243,35 +218,71 @@ onValue(ref(db), s => {
 const tickerIn = document.getElementById('ticker');
 const catSelect = document.getElementById('categoria_select');
 
+// Debounce para não disparar a cada tecla
+let searchDebounce = null;
+
 tickerIn?.addEventListener('input', async (e) => {
     const q = e.target.value.toUpperCase().trim();
     const categoriaSelecionada = catSelect.value;
     const ehInternacional = CATEGORIAS_INTERNACIONAIS.includes(categoriaSelecionada);
 
-    if (q.length < 2) return;
-    
-    try {
-        const res = await fetch(`https://brapi.dev/api/quote/list?search=${q}&token=${BRAPI_TOKEN}`);
-        const data = await res.json();
+    // Mínimo 1 caractere (cobre tickers como "O", "V", "T")
+    if (q.length < 1) {
+        const suggBox = document.getElementById('suggestions');
+        if (suggBox) suggBox.style.display = 'none';
+        return;
+    }
+
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(async () => {
         let h = "";
-        
+        const suggBox = document.getElementById('suggestions');
+
         if (ehInternacional) {
+            // Para internacionais: busca direta pelo ticker digitado + opção de forçar busca global
             h += `<div class="suggestion-item border-b-2 border-blue-100 bg-blue-50" onclick="selectAsset('${q}')">
-                    <span class="font-black text-blue-600">BUSCAR ATIVO GLOBAL: ${q}</span>
+                    <span class="font-black text-blue-600">🌍 USAR TICKER: ${q}</span>
+                    <span class="text-[9px] text-slate-400 ml-2">Buscar cotação diretamente</span>
                  </div>`;
+
+            // Tenta buscar pelo ticker exato na BRAPI (funciona para NYSE/NASDAQ)
+            try {
+                const r = await fetch(`https://brapi.dev/api/quote/${q}?token=${BRAPI_TOKEN}`);
+                const d = await r.json();
+                if (d.results && d.results[0] && d.results[0].regularMarketPrice) {
+                    const item = d.results[0];
+                    h += `<div class="suggestion-item bg-emerald-50 border-b border-emerald-100" onclick="selectAsset('${item.symbol}')">
+                            <span class="font-black text-emerald-700">${item.symbol}</span>
+                            <span class="text-[10px] text-slate-500 ml-2">${item.shortName || item.longName || ''}</span>
+                            <span class="text-[10px] font-black text-blue-600 ml-2">$ ${item.regularMarketPrice}</span>
+                          </div>`;
+                }
+            } catch(e) { /* silencia — o ticker pode não existir ainda */ }
+        } else {
+            // Para BR: busca na lista da BRAPI
+            try {
+                const res = await fetch(`https://brapi.dev/api/quote/list?search=${q}&token=${BRAPI_TOKEN}`);
+                const data = await res.json();
+                if (data.stocks) {
+                    data.stocks.slice(0, 6).forEach(s => {
+                        h += `<div class="suggestion-item" onclick="selectAsset('${s.stock}')">
+                                <span class="font-black">${s.stock}</span>
+                                <span class="text-[9px] text-slate-400 ml-2">${s.name || ''}</span>
+                              </div>`;
+                    });
+                }
+                // Se não achou nada, oferece usar o ticker digitado mesmo
+                if (!data.stocks || data.stocks.length === 0) {
+                    h += `<div class="suggestion-item bg-amber-50" onclick="selectAsset('${q}')">
+                            <span class="font-black text-amber-600">Usar ticker: ${q}</span>
+                            <span class="text-[9px] text-slate-400 ml-2">Não encontrado na lista — buscar mesmo assim</span>
+                          </div>`;
+                }
+            } catch (err) { console.error("Erro na busca BR:", err); }
         }
 
-        if (data.stocks) {
-            data.stocks.slice(0, 5).forEach(s => {
-                h += `<div class="suggestion-item" onclick="selectAsset('${s.stock}')">
-                        <span class="font-black">${s.stock}</span> 
-                        <span class="text-[9px] text-slate-400 ml-2">${s.name || ''}</span>
-                      </div>`;
-            });
-        }
-        const suggBox = document.getElementById('suggestions');
-        if(suggBox) { suggBox.innerHTML = h; suggBox.style.display = 'block'; }
-    } catch (err) { console.error("Erro na busca:", err); }
+        if (suggBox) { suggBox.innerHTML = h; suggBox.style.display = h ? 'block' : 'none'; }
+    }, 350); // 350ms de debounce
 });
 
 window.selectAsset = async (t) => {
@@ -402,7 +413,12 @@ function renderizarDetalhes(totalCat) {
 
         if (ehIntl) {
             tAtv.innerHTML += `<tr>
-                <td class="p-4 font-black text-slate-800 text-sm">${atv.ticker}</td>
+                <td class="p-4 font-black text-slate-800 text-sm">
+                    <div class="flex items-center gap-2">
+                        <span>${atv.ticker}</span>
+                        <button onclick="verTransacoes('${atv.id}','${atv.ticker}')" title="Ver transações" class="text-blue-400 hover:text-blue-600 text-base transition-colors">📋</button>
+                    </div>
+                </td>
                 <td class="p-4"><select onchange="updateAtv('${atv.id}', 'seguimento', this.value)" class="bg-slate-100 p-2 rounded-lg text-xs w-full font-bold outline-none border border-slate-200">${opt}</select></td>
                 <td class="p-4 text-center"><span contenteditable="true" onblur="updateAtv('${atv.id}', 'quantidade', this.innerText)" class="bg-slate-100 px-2 py-1 rounded-lg font-black text-sm">${atv.quantidade}</span></td>
                 <td class="p-4 text-center font-bold text-amber-600 text-sm">${fmtUSD(atv.valorUnitario)}</td>
@@ -413,7 +429,12 @@ function renderizarDetalhes(totalCat) {
             </tr>`;
         } else {
             tAtv.innerHTML += `<tr>
-                <td class="p-4 font-black text-slate-800 text-sm">${atv.ticker}</td>
+                <td class="p-4 font-black text-slate-800 text-sm">
+                    <div class="flex items-center gap-2">
+                        <span>${atv.ticker}</span>
+                        <button onclick="verTransacoes('${atv.id}','${atv.ticker}')" title="Ver transações" class="text-blue-400 hover:text-blue-600 text-base transition-colors">📋</button>
+                    </div>
+                </td>
                 <td class="p-4"><select onchange="updateAtv('${atv.id}', 'seguimento', this.value)" class="bg-slate-100 p-2 rounded-lg text-xs w-full font-bold outline-none border border-slate-200">${opt}</select></td>
                 <td class="p-4 text-center"><span contenteditable="true" onblur="updateAtv('${atv.id}', 'quantidade', this.innerText)" class="bg-slate-100 px-2 py-1 rounded-lg font-black text-sm">${atv.quantidade}</span></td>
                 <td class="p-4 text-center font-bold text-slate-700 text-sm">${fmtCur(atv.valorUnitario)}</td>
@@ -510,3 +531,272 @@ function popularSelectCategorias() {
         CATEGORIAS_DEFINIDAS.map(c => `<option value="${c}">${c}</option>`).join("");
     atualizarStepQtd();
 }
+
+// ============================================================
+// SISTEMA DE TRANSAÇÕES
+// ============================================================
+
+let todasTransacoes = {};
+
+// Popula select de ativos no modal de transação
+function popularSelectAtivos() {
+    const sel = document.getElementById('trans_ativo_select');
+    if (!sel) return;
+    const ativos = Object.entries(todosDados);
+    sel.innerHTML = `<option value="">— SELECIONAR ATIVO —</option>` +
+        ativos.map(([id, a]) => `<option value="${id}">${a.ticker} (${a.categoria})</option>`).join('');
+}
+
+// Lê transações do Firebase
+onValue(ref(db, 'transacoes'), snap => {
+    todasTransacoes = snap.val() || {};
+    desenharGrafico('7d');
+});
+
+// Salvar nova transação
+document.getElementById('formTransacao').onsubmit = async (e) => {
+    e.preventDefault();
+    const tipo = document.querySelector('input[name="tipo_transacao"]:checked').value;
+    const ativoId = document.getElementById('trans_ativo_select').value;
+    const data = document.getElementById('trans_data').value;
+    const qtd = parseFloat(document.getElementById('trans_qtd').value) || 0;
+    const preco = parseReal(document.getElementById('trans_preco').value);
+    const obs = document.getElementById('trans_obs').value;
+
+    if (!ativoId || !data || !qtd || !preco) return alert('Preencha todos os campos obrigatórios.');
+
+    const ativo = todosDados[ativoId];
+    await push(ref(db, 'transacoes'), {
+        tipo, ativoId, ticker: ativo.ticker, categoria: ativo.categoria,
+        seguimento: ativo.seguimento || '', data, quantidade: qtd,
+        preco, total: qtd * preco, obs, criadoEm: Date.now()
+    });
+
+    // Grava snapshot do patrimônio atual
+    await gravarSnapshot();
+
+    toggleModal('modalTransacao');
+    e.target.reset();
+};
+
+// Grava snapshot diário do patrimônio no Firebase
+async function gravarSnapshot() {
+    let totalGeral = 0;
+    Object.values(todosDados).forEach(a => {
+        const ehIntl = CATEGORIAS_INTERNACIONAIS.includes(a.categoria);
+        const v = (a.quantidade || 0) * (a.valorUnitario || 0);
+        totalGeral += ehIntl ? v * (cotacaoDolar || 1) : v;
+    });
+    const hoje = new Date().toISOString().split('T')[0];
+    await set(ref(db, `snapshots/${hoje}`), { valor: totalGeral, ts: Date.now() });
+}
+
+// Ver transações de um ativo específico
+window.verTransacoes = (ativoId, ticker) => {
+    const modal = document.getElementById('modalVerTransacoes');
+    document.getElementById('titulo-ver-trans').innerText = `Transações: ${ticker}`;
+    const tbody = document.getElementById('tbody-ver-trans');
+    tbody.innerHTML = '';
+
+    const trans = Object.entries(todasTransacoes)
+        .filter(([, t]) => t.ativoId === ativoId)
+        .sort(([, a], [, b]) => new Date(b.data) - new Date(a.data));
+
+    if (trans.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400 font-bold text-xs uppercase">Nenhuma transação registrada para este ativo.</td></tr>`;
+    } else {
+        trans.forEach(([tid, t]) => {
+            const corTipo = t.tipo === 'COMPRA' ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50';
+            tbody.innerHTML += `<tr class="hover:bg-slate-50 transition-colors">
+                <td class="p-3 font-bold text-slate-700 text-xs">${t.data}</td>
+                <td class="p-3 text-center"><span class="px-2 py-1 rounded-lg font-black text-[10px] uppercase ${corTipo}">${t.tipo}</span></td>
+                <td class="p-3 text-center font-black text-xs text-slate-800">${t.quantidade}</td>
+                <td class="p-3 text-center font-bold text-xs text-blue-600">${fmtCur(t.preco)}</td>
+                <td class="p-3 text-right font-black text-xs text-slate-800">${fmtCur(t.total)}</td>
+                <td class="p-3 text-xs text-slate-400">${t.obs || '--'}</td>
+                <td class="p-3 text-center">
+                    <button onclick="abrirEditTrans('${tid}')" class="text-blue-400 hover:text-blue-600 font-black text-sm mr-2 transition-colors">✏️</button>
+                    <button onclick="deletarTrans('${tid}')" class="text-rose-400 hover:text-rose-600 font-black text-sm transition-colors">✕</button>
+                </td>
+            </tr>`;
+        });
+    }
+
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+};
+
+window.fecharVerTransacoes = () => {
+    document.getElementById('modalVerTransacoes').classList.add('opacity-0', 'pointer-events-none');
+};
+
+// Abrir edição de transação
+window.abrirEditTrans = (tid) => {
+    const t = todasTransacoes[tid];
+    if (!t) return;
+    document.getElementById('edit_trans_id').value = tid;
+    document.getElementById('edit_trans_data').value = t.data;
+    document.getElementById('edit_trans_qtd').value = t.quantidade;
+    document.getElementById('edit_trans_preco').value = t.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    document.getElementById('edit_trans_obs').value = t.obs || '';
+    document.getElementById('modalEditTrans').classList.remove('opacity-0', 'pointer-events-none');
+};
+
+window.fecharEditTrans = () => {
+    document.getElementById('modalEditTrans').classList.add('opacity-0', 'pointer-events-none');
+};
+
+window.salvarEdicaoTrans = async () => {
+    const tid = document.getElementById('edit_trans_id').value;
+    const data = document.getElementById('edit_trans_data').value;
+    const qtd = parseFloat(document.getElementById('edit_trans_qtd').value) || 0;
+    const preco = parseReal(document.getElementById('edit_trans_preco').value);
+    const obs = document.getElementById('edit_trans_obs').value;
+    await update(ref(db, `transacoes/${tid}`), { data, quantidade: qtd, preco, total: qtd * preco, obs });
+    fecharEditTrans();
+};
+
+window.deletarTrans = async (tid) => {
+    if (!confirm('Excluir esta transação?')) return;
+    await remove(ref(db, `transacoes/${tid}`));
+    // Recarrega o modal de ver transações
+    const t = todasTransacoes[tid];
+    if (t) verTransacoes(t.ativoId, t.ticker);
+};
+
+// Abre modal de transação e pré-seleciona ativo se em visão detalhada
+window.toggleModal = (id) => {
+    const m = document.getElementById(id);
+    if(m) {
+        m.classList.toggle('opacity-0');
+        m.classList.toggle('pointer-events-none');
+        if (id === 'modalAtivo') {
+            const overlay = document.getElementById('lock-overlay');
+            const btn = document.getElementById('btn-salvar-ativo');
+            const sel = document.getElementById('categoria_select');
+            const form = document.getElementById('formInvestimento');
+            if (overlay) overlay.style.display = 'flex';
+            if (btn) { btn.disabled = true; btn.className = 'w-full bg-slate-300 text-slate-500 py-4 rounded-xl font-black uppercase mt-4 shadow-lg cursor-not-allowed transition-all'; }
+            if (sel) sel.value = '';
+            if (form) form.reset();
+            const totalEl = document.getElementById('total_calculado');
+            if (totalEl) totalEl.innerText = 'R$ 0,00';
+            const suggBox = document.getElementById('suggestions');
+            if (suggBox) suggBox.style.display = 'none';
+            atualizarStepQtd();
+        }
+        if (id === 'modalTransacao' && !m.classList.contains('opacity-0')) {
+            popularSelectAtivos();
+            // Define hoje como data padrão
+            document.getElementById('trans_data').value = new Date().toISOString().split('T')[0];
+            // Se há categoria ativa, pré-seleciona primeiro ativo dela
+            if (categoriaAtiva) {
+                const sel = document.getElementById('trans_ativo_select');
+                const ativosDaCat = Object.entries(todosDados).filter(([, a]) => a.categoria === categoriaAtiva);
+                if (ativosDaCat.length > 0) sel.value = ativosDaCat[0][0];
+            }
+        }
+    }
+};
+
+// ============================================================
+// GRÁFICO DE EVOLUÇÃO
+// ============================================================
+
+let chartInstance = null;
+let filtroAtual = '7d';
+
+function filtrarPontos(snapshots, filtro) {
+    const agora = new Date();
+    const dias = filtro === '7d' ? 7 : filtro === '30d' ? 30 : 9999;
+    const limite = new Date(agora);
+    limite.setDate(limite.getDate() - dias);
+    return Object.entries(snapshots)
+        .filter(([data]) => new Date(data) >= limite)
+        .sort(([a], [b]) => new Date(a) - new Date(b));
+}
+
+window.filtrarGrafico = (filtro) => {
+    filtroAtual = filtro;
+    document.querySelectorAll('.chart-filter-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.chart-filter-btn[onclick="filtrarGrafico('${filtro}')"]`)?.classList.add('active');
+    desenharGrafico(filtro);
+};
+
+function desenharGrafico(filtro = filtroAtual) {
+    const canvas = document.getElementById('graficoEvolucao');
+    if (!canvas) return;
+
+    // Junta snapshots salvos com o valor atual
+    const snapshotsCompletos = { ...((window._snapshotsFirebase) || {}) };
+    const hoje = new Date().toISOString().split('T')[0];
+    let totalAtual = 0;
+    Object.values(todosDados).forEach(a => {
+        const ehIntl = CATEGORIAS_INTERNACIONAIS.includes(a.categoria);
+        const v = (a.quantidade || 0) * (a.valorUnitario || 0);
+        totalAtual += ehIntl ? v * (cotacaoDolar || 1) : v;
+    });
+    if (totalAtual > 0) snapshotsCompletos[hoje] = { valor: totalAtual };
+
+    const pontos = filtrarPontos(snapshotsCompletos, filtro);
+
+    if (pontos.length === 0) {
+        if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '11px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Sem dados ainda. Registre transações para ver a evolução.', canvas.width / 2, canvas.height / 2);
+        return;
+    }
+
+    const labels = pontos.map(([d]) => {
+        const [y, m, dia] = d.split('-');
+        return `${dia}/${m}`;
+    });
+    const valores = pontos.map(([, v]) => v.valor);
+    const primeiro = valores[0] || 0;
+    const ultimo = valores[valores.length - 1] || 0;
+    const subindo = ultimo >= primeiro;
+    const cor = subindo ? '#10b981' : '#f43f5e';
+
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                data: valores,
+                borderColor: cor,
+                backgroundColor: subindo ? 'rgba(16,185,129,0.08)' : 'rgba(244,63,94,0.08)',
+                borderWidth: 2.5,
+                pointRadius: pontos.length > 15 ? 0 : 3,
+                pointHoverRadius: 5,
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => fmtCur(ctx.parsed.y)
+                    }
+                }
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 9, weight: '700' }, color: '#94a3b8' } },
+                y: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 9 }, color: '#94a3b8', callback: v => 'R$' + (v >= 1000 ? (v/1000).toFixed(1)+'k' : v.toFixed(0)) } }
+            }
+        }
+    });
+}
+
+// Lê snapshots do Firebase para o gráfico
+onValue(ref(db, 'snapshots'), snap => {
+    window._snapshotsFirebase = snap.val() || {};
+    desenharGrafico(filtroAtual);
+});

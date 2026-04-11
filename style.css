@@ -77,6 +77,19 @@ tfoot td {
     background: #f8fafc;
 }
 
+/* Botões de filtro do gráfico */
+.chart-filter-btn {
+    background: #f1f5f9;
+    color: #94a3b8;
+    border: 1px solid #e2e8f0;
+    transition: all 0.15s;
+    cursor: pointer;
+    font-size: 0.65rem;
+    font-weight: 900;
+}
+.chart-filter-btn:hover { background: #eff6ff; color: #3b82f6; border-color: #bfdbfe; }
+.chart-filter-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
+
 #sync-indicator { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background-color: #10b981; }
 .updating { animation: pulse 1.5s infinite; background-color: #f59e0b !important; }
 
